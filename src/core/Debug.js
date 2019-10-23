@@ -145,6 +145,7 @@ function Debug(config) {
 
         if (showLogTimestamp) {
             logTime = new Date().getTime();
+            message += '[' + logTime + ']';
             message += '[' + (logTime - startTime) + ']';
         }
 
