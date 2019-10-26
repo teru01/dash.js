@@ -143,7 +143,13 @@ module.exports = function (grunt) {
                 cwd: '.',
                 src: 'index.d.ts',
                 dest: 'build/typings/'
-            }]
+            }, {
+                expand: true,
+                cwd: 'build/temp',
+                src: 'dash.all.debug.js',
+                dest: '/usr/local/nginx/html/js'
+            }
+            ]
           }
         },
         exorcise: {
