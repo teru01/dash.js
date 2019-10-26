@@ -234,6 +234,7 @@ function ScheduleController(config) {
 
                         if (request) {
                             logger.debug('Next fragment request url is ' + request.url);
+                            request.url += '?k=2';
                             fragmentModel.executeRequest(request);
                         } else { // Use case - Playing at the bleeding live edge and frag is not available yet. Cycle back around.
                             setFragmentProcessState(false);
@@ -295,7 +296,7 @@ function ScheduleController(config) {
 
     function startScheduleTimer(value) {
         clearTimeout(scheduleTimeout);
-
+        logger.debug('schedule time: ', value);
         scheduleTimeout = setTimeout(schedule, value);
     }
 
