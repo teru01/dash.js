@@ -75,7 +75,8 @@ function XHRLoader(cfg) {
         xhr.onerror = httpRequest.onerror;
         xhr.onprogress = httpRequest.progress;
         xhr.onabort = httpRequest.onabort;
-
+        xhr.setRequestHeader('cache-control', 'max-age=0');
+        xhr.setRequestHeader('X-push-directive', '2');
         xhr.send();
 
         httpRequest.response = xhr;
