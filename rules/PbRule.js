@@ -29,32 +29,64 @@
  *  POSSIBILITY OF SUCH DAMAGE.
  */
 
-var CustomThroughputRule;
+var PbRule;
 
-function CustomThroughputRuleClass() {
-
-    let factory = dashjs.FactoryMaker;//jshint ignore:line
+function PbRuleClass() {
+    let factory = dashjs.FactoryMaker;
     let SwitchRequest = factory.getClassFactoryByName('SwitchRequest');
     let MetricsModel = factory.getSingletonFactoryByName('MetricsModel');
-
     let Debug = factory.getSingletonFactoryByName('Debug');
+    let metricsModel = MetricsModel(context).getInstance();
+    const abrController = rulesContext.getAbrController();
+    var mediaType = rulesContext.getMediaInfo().type;
+    var metrics = metricsModel.getMetricsFor(mediaType, true);
+    const throughputHistory = abrController.getThroughputHistory();
+    const streamInfo = rulesContext.getStreamInfo();
+    const isDynamic = streamInfo && streamInfo.manifestInfo ? streamInfo.manifestInfo.isDynamic : null;
 
     let context = this.context;
     let instance,
         logger;
+    const cdfRange = 20
+    let cdf = (new Array(cdfRange)).fill(0);
+    let prevThrouput = -1;
+    let dataNum = 0;
 
     function setup() {
         logger = Debug(context).getInstance().getLogger(instance);
+        setInterval(calcCDF, 2000);
+    }
+
+    function calcCDF() {
+        const throughput = throughputHistory.getSafeAverageThroughput(mediaType, isDynamic);
+        const x = prevThrouput !== -1 ? 1 : prevThrouput / throughput;
+        cdf[Math.min(Math.floor(x * (cdfRange / 2)), cdfRange-1)] += 1;
+        dataNum += 1
+    }
+
+    function getMinimunX(ep) {
+        let acum = (new Array(cdfRange + 1)).fill(0);
+        for(let i=1; i<cdfRange+1; i++) {
+            acum[i] = acum[i-1] + cdf[i-1]
+        }
+        for(let i = acum.length-1; i>=0; i--) {
+            if ((acum[i] / dataNum) <= 1 - ep) {
+                return i / cdfRange;
+            }
+        }
+        return 0;
     }
 
     function getMaxIndex(rulesContext) {
-        // here you can get some informations aboit metrics for example, to implement the rule
-        let metricsModel = MetricsModel(context).getInstance();
-        var mediaType = rulesContext.getMediaInfo().type;
-        var metrics = metricsModel.getMetricsFor(mediaType, true);
-
+        // here you can get some informations about metrics for example, to implement the rule
+ 
+        
+        console.log("throughput: ", throughput + "kbit/s")
+        
         // this sample only display metrics in console
-        console.log(metrics);
+        // console.log(metrics.BufferLevel.);
+
+        //TODO: MetricsにCDFを追加する: 過去のスループットから
 
         return SwitchRequest(context).create();
     }
@@ -68,6 +100,6 @@ function CustomThroughputRuleClass() {
     return instance;
 }
 
-CustomThroughputRuleClass.__dashjs_factory_name = 'CustomThroughputRule';
-CustomThroughputRule = dashjs.FactoryMaker.getClassFactory(CustomThroughputRuleClass); //jshint ignore:line
+PbRuleClass.__dashjs_factory_name = 'PbRule';
+PbRule = dashjs.FactoryMaker.getClassFactory(PbRuleClass); //jshint ignore:line
 
