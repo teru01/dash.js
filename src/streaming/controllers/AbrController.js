@@ -440,6 +440,7 @@ function AbrController() {
         return infoList;
     }
 
+    // BOLAとThroughputはここで切り替え決定している
     function updateIsUsingBufferOccupancyABR(mediaType, bufferLevel) {
         const strategy = settings.get().streaming.ABRStrategy;
 

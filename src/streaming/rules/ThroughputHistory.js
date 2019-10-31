@@ -213,7 +213,7 @@ function ThroughputHistory(config) {
     function getSafeAverageThroughput(mediaType, isDynamic) {
         let average = getAverageThroughput(mediaType, isDynamic);
         if (!isNaN(average)) {
-            average *= settings.get().streaming.abr.bandwidthSafetyFactor;
+            average *= settings.get().streaming.abr.bandwidthSafetyFactor; //safetyfacgtor default 0.9
         }
         return average;
     }
