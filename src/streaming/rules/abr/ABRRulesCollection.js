@@ -96,7 +96,13 @@ function ABRRulesCollection(config) {
         const customRules = mediaPlayerModel.getABRCustomRules();
         customRules.forEach(function (rule) {
             if (rule.type === QUALITY_SWITCH_RULES) {
-                qualitySwitchRules.push(rule.rule(context).create());
+                qualitySwitchRules.push(rule.rule(context).create(
+                    {
+                        dashMetrics: dashMetrics,
+                        mediaPlayerModel: mediaPlayerModel,
+                        settings: settings
+                    }
+                ));
             }
 
             if (rule.type === ABANDON_FRAGMENT_RULES) {

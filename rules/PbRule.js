@@ -31,8 +31,10 @@
 
 var PbRule;
 
-function PbRuleClass() {
-    let context = this.context;
+function PbRuleClass(config) {
+    let context = this.context
+    config = config || {};
+    const dashMetrics = config.dashMetrics;
     let instance,
         logger;
     const segDuration = 2.5; // TODO: 要検証　HTTPRequestの_mediadurationから決め打ち
@@ -59,16 +61,16 @@ function PbRuleClass() {
         }
         const throughput = currentThroughput
         const x = (prevThrouput === -1) ? 1 : prevThrouput / throughput;
-        cdf[Math.min(Math.floor(x * (cdfRange / 2)), cdfRange-1)] += 1;
+        cdf[Math.min(Math.floor(x * (cdfRange / 2)), cdfRange - 1)] += 1;
         dataNum += 1
     }
 
     function getMinimunX(ep) {
         let acum = (new Array(cdfRange + 1)).fill(0);
-        for(let i=1; i<cdfRange+1; i++) {
-            acum[i] = acum[i-1] + cdf[i-1];
+        for (let i = 1; i < cdfRange + 1; i++) {
+            acum[i] = acum[i - 1] + cdf[i - 1];
         }
-        for(let i = acum.length-1; i>=0; i--) {
+        for (let i = acum.length - 1; i >= 0; i--) {
             if ((acum[i] / dataNum) <= 1 - ep) {
                 logger.debug("minimux ratio x* = ", i / cdfRange);
                 return i / cdfRange;
@@ -86,18 +88,37 @@ function PbRuleClass() {
         const streamInfo = rulesContext.getStreamInfo();
         const isDynamic = streamInfo && streamInfo.manifestInfo ? streamInfo.manifestInfo.isDynamic : null;
         currentThroughput = throughputHistory.getSafeAverageThroughput(mediaType, isDynamic);
-        
-        // これ、スケジューラーが勝手にやってる説がある
-        //const initRequestTime = 1;
-        // const tsn = Math.max(initRequestTime + (metrics.HttpList.length - 2) * segDuration, )
+
+        const bufferLevel = dashMetrics.getCurrentBufferLevel(mediaType, true);
+        console.log("buf level :", bufferLevel);
+        // console.log(metrics.getCurrentBufferLevel(mediaType, true));
+        // if (metrics.RequestsQueue) {
+        //     const reqList = metrics.RequestsQueue.executedRequests;
+        //     if (reqList && reqList.length > 1) {
+        //         const initRequestTime = reqList[1].requestStartDate.getTime();
+        //         let b, tsn;
+        //         const tn = initRequestTime + (metrics.HttpList.length - 2) * segDuration;
+        //         const now = new Date().getTime();
+        //         if (tn > now) {
+        //             tsn = tn;
+        //             b = maxL;
+        //         } else {
+        //             tsn = now
+        //             b = now_buf;
+        //         }
+
+        //     }
+        // }
+
         // console.log("tsn: ", tsn);
-        
+
         // const gamma = 1 - ()/();
         // this sample only display metrics in console
-        logger.debug(metrics);
-        if (metrics.RequetsQueue) {
-            const reqList = metrics.RequetsQueue.executedRequests
-            logger.debug("latest request start time: ", reqList[reqList.length - 1].requestsStartDate);
+        console.log(metrics);
+        // console.log(JSON.stringify(metrics.RequestsQueue));
+        if (metrics.RequestsQueue) {
+            const reqList = metrics.RequestsQueue.executedRequests;
+            logger.debug("latest request start time: ", reqList[reqList.length - 1].requestStartDate.getTime());
         }
         // console.log("cdf: ", cdf);
         // console.log(getMinimunX(0.7));
