@@ -553,10 +553,10 @@ function BufferController(config) {
         if (((!settings.get().streaming.lowLatencyEnabled && bufferLevel < STALL_THRESHOLD) || bufferLevel === 0) && !isBufferingCompleted) {
             notifyBufferStateChanged(MetricsConstants.BUFFER_EMPTY);
         } else {
-            if (isBufferingCompleted || bufferLevel >= 8) {
+            if (isBufferingCompleted || bufferLevel >= streamProcessor.getStreamInfo().manifestInfo.minBufferTime) {
                 if (isBufferingCompleted) {
                     logger.debug('isBufferingCompleted ok');
-                } else if (bufferLevel >= 8) {
+                } else if (isBufferingCompleted || bufferLevel >= streamProcessor.getStreamInfo().manifestInfo.minBufferTime) {
                     logger.debug('十分なバッファ');
                 }
                 notifyBufferStateChanged(MetricsConstants.BUFFER_LOADED);
