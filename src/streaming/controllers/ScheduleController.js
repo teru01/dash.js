@@ -219,6 +219,7 @@ function ScheduleController(config) {
                         // Don't schedule next fragments while pruning to avoid buffer inconsistencies
                         if (!streamProcessor.getBufferController().getIsPruningInProgress()) {
                             request = nextFragmentRequestRule.execute(streamProcessor, seekTarget, replacement);
+                            logger.debug('request in schedule: ', request);
                             setSeekTarget(NaN);
                             if (request && !replacement) {
                                 if (!isNaN(request.startTime + request.duration)) {
@@ -238,6 +239,7 @@ function ScheduleController(config) {
                             fragmentModel.executeRequest(request);
                         } else { // Use case - Playing at the bleeding live edge and frag is not available yet. Cycle back around.
                             setFragmentProcessState(false);
+                            logger.debug('not request: call start startScheduleTimer: ', settings.get().streaming.lowLatencyEnabled ? 100 : 500);
                             startScheduleTimer(settings.get().streaming.lowLatencyEnabled ? 100 : 500);
                         }
                     }
@@ -500,13 +502,17 @@ function ScheduleController(config) {
             const fragEndTime = e.startTime + currentRepresentationInfo.fragmentDuration;
             const safeBufferLevel = currentRepresentationInfo.fragmentDuration * 1.5;
             if ((currentTime + safeBufferLevel) >= fragEndTime) {
+                logger.debug('(currentTime + safeBufferLevel) >= fragEndTime');
                 startScheduleTimer(0);
             }
             else {
+                logger.debug('call startScheduleTimer: ', (fragEndTime - (currentTime + safeBufferLevel)) * 1000);
                 startScheduleTimer((fragEndTime - (currentTime + safeBufferLevel)) * 1000);
             }
             isReplacementRequest = false;
         } else {
+            // segmentのDLが完了した時。次のバッファをスケジューリングする
+            logger.debug('not isReplacementRequest && !isNaN(e.startTime)');
             startScheduleTimer(0);
         }
     }

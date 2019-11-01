@@ -35,7 +35,8 @@ function PbRuleClass() {
     let context = this.context;
     let instance,
         logger;
-    const cdfRange = 20
+    const segDuration = 2.5; // TODO: 要検証　HTTPRequestの_mediadurationから決め打ち
+    const cdfRange = 20;
     let cdf = (new Array(cdfRange)).fill(0);
     let prevThrouput = -1;
     let dataNum = 0;
@@ -84,16 +85,22 @@ function PbRuleClass() {
         const throughputHistory = abrController.getThroughputHistory();
         const streamInfo = rulesContext.getStreamInfo();
         const isDynamic = streamInfo && streamInfo.manifestInfo ? streamInfo.manifestInfo.isDynamic : null;
-
         currentThroughput = throughputHistory.getSafeAverageThroughput(mediaType, isDynamic);
-        // here you can get some informations about metrics for example, to implement the rule       
-        const initRequestTime = 1;
-        // const tsn = Math.max(initRequestTime + (metrics.HttpList.length - 1) * )
+        
+        // これ、スケジューラーが勝手にやってる説がある
+        //const initRequestTime = 1;
+        // const tsn = Math.max(initRequestTime + (metrics.HttpList.length - 2) * segDuration, )
+        // console.log("tsn: ", tsn);
+        
         // const gamma = 1 - ()/();
         // this sample only display metrics in console
-        console.log(metrics);
-        console.log("cdf: ", cdf);
-        console.log(getMinimunX(0.7));
+        logger.debug(metrics);
+        if (metrics.RequetsQueue) {
+            const reqList = metrics.RequetsQueue.executedRequests
+            logger.debug("latest request start time: ", reqList[reqList.length - 1].requestsStartDate);
+        }
+        // console.log("cdf: ", cdf);
+        // console.log(getMinimunX(0.7));
 
         //TODO: MetricsにCDFを追加する: 過去のスループットから
 
