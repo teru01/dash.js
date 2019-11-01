@@ -53,6 +53,17 @@ function PbRuleClass(config) {
     function setup() {
         logger = Debug(context).getInstance().getLogger(instance);
         setInterval(calcCDF, 2000);
+
+        eventBus.on(Events.BUFFER_EMPTY, onBufferEmpty, instance);
+        eventBus.on(Events.CAN_PLAY, onCanPlay, instance);
+    }
+
+    function onBufferEmpty() {
+        console.log("バッファがない！！！");
+    }
+
+    function onCanPlay() {
+        console.log("再生かいし！！");
     }
 
     function calcCDF() {
@@ -63,6 +74,7 @@ function PbRuleClass(config) {
         const x = (prevThrouput === -1) ? 1 : prevThrouput / throughput;
         cdf[Math.min(Math.floor(x * (cdfRange / 2)), cdfRange - 1)] += 1;
         dataNum += 1
+        prevThrouput = throughput;
     }
 
     function getMinimunX(ep) {
@@ -81,34 +93,46 @@ function PbRuleClass(config) {
     }
 
     function getMaxIndex(rulesContext) {
+        const ep = 0.25
         const abrController = rulesContext.getAbrController();
+        const scheduleController = rulesContext.getScheduleController();
         var mediaType = rulesContext.getMediaInfo().type;
         var metrics = metricsModel.getMetricsFor(mediaType, true);
         const throughputHistory = abrController.getThroughputHistory();
         const streamInfo = rulesContext.getStreamInfo();
         const isDynamic = streamInfo && streamInfo.manifestInfo ? streamInfo.manifestInfo.isDynamic : null;
         currentThroughput = throughputHistory.getSafeAverageThroughput(mediaType, isDynamic);
+        const bufferStateVO = dashMetrics.getLatestBufferInfoVO(mediaType, true, MetricsConstants.BUFFER_STATE);
 
-        const bufferLevel = dashMetrics.getCurrentBufferLevel(mediaType, true);
-        console.log("buf level :", bufferLevel);
-        // console.log(metrics.getCurrentBufferLevel(mediaType, true));
-        // if (metrics.RequestsQueue) {
-        //     const reqList = metrics.RequestsQueue.executedRequests;
-        //     if (reqList && reqList.length > 1) {
-        //         const initRequestTime = reqList[1].requestStartDate.getTime();
-        //         let b, tsn;
-        //         const tn = initRequestTime + (metrics.HttpList.length - 2) * segDuration;
-        //         const now = new Date().getTime();
-        //         if (tn > now) {
-        //             tsn = tn;
-        //             b = maxL;
-        //         } else {
-        //             tsn = now
-        //             b = now_buf;
-        //         }
+        const currentBufferLevel = dashMetrics.getCurrentBufferLevel(mediaType, true);
+        const maxBufferLevel = 5;
+        // console.log("buf level :", currentBufferLevel);
+        if (metrics.RequestsQueue) {
+            const reqList = metrics.RequestsQueue.executedRequests;
+            if (reqList && reqList.length > 1) {
+                const initRequestTime = reqList[1].requestStartDate.getTime();
+                let b, tsn;
+                const tn = initRequestTime + (metrics.HttpList.length - 2) * segDuration;
+                const now = new Date().getTime();
+                if (tn > now) {
+                    tsn = tn;
+                    b = maxBufferLevel;
+                } else {
+                    tsn = now;
+                    b = currentBufferLevel;
+                }
+                const x = getMinimunX(ep);
+                const gamma = 1 - (b + segDuration - maxBufferLevel)/(segDuration * x);
+                const nextBitrate = prevThrouput * (1 - gamma);
+                console.log("nextBitrate: ", nextBitrate);
+                scheduleController.startScheduleTimer(tsn - new Date().getTime());
+            } else {
 
-        //     }
-        // }
+            }
+        } else {
+            // まだrequestQueueが存在しないので即時次のリクエストをだす
+            scheduleController.startScheduleTimer(0)
+        }
 
         // console.log("tsn: ", tsn);
 
