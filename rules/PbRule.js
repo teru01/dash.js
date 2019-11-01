@@ -45,17 +45,19 @@ function PbRuleClass(config) {
     let currentThroughput;
 
     let factory = dashjs.FactoryMaker;
+    let EventBus = factory.getSingletonFactoryByName('EventBus');
     let SwitchRequest = factory.getClassFactoryByName('SwitchRequest');
     let MetricsModel = factory.getSingletonFactoryByName('MetricsModel');
     let Debug = factory.getSingletonFactoryByName('Debug');
     let metricsModel = MetricsModel(context).getInstance();
+    const eventBus = EventBus(context).getInstance();
 
     function setup() {
         logger = Debug(context).getInstance().getLogger(instance);
         setInterval(calcCDF, 2000);
 
-        eventBus.on(Events.BUFFER_EMPTY, onBufferEmpty, instance);
-        eventBus.on(Events.CAN_PLAY, onCanPlay, instance);
+        eventBus.on(dashjs.MediaPlayer.events.BUFFER_EMPTY, onBufferEmpty, instance);
+        eventBus.on(dashjs.MediaPlayer.events.CAN_PLAY, onCanPlay, instance);
     }
 
     function onBufferEmpty() {
@@ -102,7 +104,7 @@ function PbRuleClass(config) {
         const streamInfo = rulesContext.getStreamInfo();
         const isDynamic = streamInfo && streamInfo.manifestInfo ? streamInfo.manifestInfo.isDynamic : null;
         currentThroughput = throughputHistory.getSafeAverageThroughput(mediaType, isDynamic);
-        const bufferStateVO = dashMetrics.getLatestBufferInfoVO(mediaType, true, MetricsConstants.BUFFER_STATE);
+        // const bufferStateVO = dashMetrics.getLatestBufferInfoVO(mediaType, true, MetricsConstants.BUFFER_STATE);
 
         const currentBufferLevel = dashMetrics.getCurrentBufferLevel(mediaType, true);
         const maxBufferLevel = 5;
@@ -126,12 +128,17 @@ function PbRuleClass(config) {
                 const nextBitrate = prevThrouput * (1 - gamma);
                 console.log("nextBitrate: ", nextBitrate);
                 scheduleController.startScheduleTimer(tsn - new Date().getTime());
+                // scheduleController.setTimeToLoadDelay(0)
+
             } else {
 
             }
         } else {
             // まだrequestQueueが存在しないので即時次のリクエストをだす
             scheduleController.startScheduleTimer(0)
+            // console.log(scheduleController);
+            // scheduleController.setTimeToLoadDelay(0)
+            
         }
 
         // console.log("tsn: ", tsn);
