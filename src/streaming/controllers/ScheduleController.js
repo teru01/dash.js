@@ -513,6 +513,10 @@ function ScheduleController(config) {
         } else {
             // segmentのDLが完了した時。次のバッファをスケジューリングする
             logger.debug('not isReplacementRequest && !isNaN(e.startTime)');
+            logger.debug('DL完了。本来はこのタイミングで次がスケジューリングされる');
+            // if(filling_state) { // TODO
+            //     startScheduleTimer(0);
+            // }
             startScheduleTimer(0);
         }
     }
@@ -721,7 +725,8 @@ function ScheduleController(config) {
         stop: stop,
         reset: reset,
         getBufferTarget: getBufferTarget,
-        finalisePlayList: finalisePlayList
+        finalisePlayList: finalisePlayList,
+        startScheduleTimer: startScheduleTimer
     };
 
     setup();
