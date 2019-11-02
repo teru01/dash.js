@@ -86,7 +86,6 @@ function PbRuleClass(config) {
         }
         for (let i = acum.length - 1; i >= 0; i--) {
             if ((acum[i] / dataNum) <= 1 - ep) {
-                logger.debug("minimux ratio x* = ", i / cdfRange);
                 return i / cdfRange;
             }
         }
@@ -98,16 +97,17 @@ function PbRuleClass(config) {
         const ep = 0.25
         const abrController = rulesContext.getAbrController();
         const scheduleController = rulesContext.getScheduleController();
-        var mediaType = rulesContext.getMediaInfo().type;
+        const mediaInfo = rulesContext.getMediaInfo();
+        var mediaType = mediaInfo.type;
         var metrics = metricsModel.getMetricsFor(mediaType, true);
         const throughputHistory = abrController.getThroughputHistory();
         const streamInfo = rulesContext.getStreamInfo();
         const isDynamic = streamInfo && streamInfo.manifestInfo ? streamInfo.manifestInfo.isDynamic : null;
         currentThroughput = throughputHistory.getSafeAverageThroughput(mediaType, isDynamic);
-        // const bufferStateVO = dashMetrics.getLatestBufferInfoVO(mediaType, true, MetricsConstants.BUFFER_STATE);
 
         const currentBufferLevel = dashMetrics.getCurrentBufferLevel(mediaType, true);
         const maxBufferLevel = 5;
+        let nextBitrate = 0;
         // console.log("buf level :", currentBufferLevel);
         if (metrics.RequestsQueue) {
             const reqList = metrics.RequestsQueue.executedRequests;
@@ -124,12 +124,20 @@ function PbRuleClass(config) {
                     b = currentBufferLevel;
                 }
                 const x = getMinimunX(ep);
-                const gamma = 1 - (b + segDuration - maxBufferLevel)/(segDuration * x);
-                const nextBitrate = prevThrouput * (1 - gamma);
-                console.log("nextBitrate: ", nextBitrate);
-                scheduleController.startScheduleTimer(tsn - new Date().getTime());
+                const gamma = 1 - (b + segDuration - maxBufferLevel) / (segDuration * x);
+                nextBitrate = prevThrouput * (1 - gamma);
+                console.log("tn: ", tn);
+                console.log("tsn: ", tsn);
+                console.log("maxbuf: ", maxBufferLevel);
+                console.log("currentbuf: ", currentBufferLevel);
+                console.log("minimux ratio x* = ", x);
+                console.log("cdf: ", cdf);
+                console.log("gamma: ", gamma);
+                console.log("next scheduling time: ", tsn - new Date().getTime());
+                console.log("prev throughput: ", prevThrouput, "kbit/s");
+                console.log("nextBitrate: ", nextBitrate, "kbit/s");
+                // scheduleController.startScheduleTimer(tsn - new Date().getTime());
                 // scheduleController.setTimeToLoadDelay(0)
-
             } else {
 
             }
@@ -138,25 +146,18 @@ function PbRuleClass(config) {
             scheduleController.startScheduleTimer(0)
             // console.log(scheduleController);
             // scheduleController.setTimeToLoadDelay(0)
-            
+
         }
-
-        // console.log("tsn: ", tsn);
-
-        // const gamma = 1 - ()/();
-        // this sample only display metrics in console
         console.log(metrics);
         // console.log(JSON.stringify(metrics.RequestsQueue));
-        if (metrics.RequestsQueue) {
-            const reqList = metrics.RequestsQueue.executedRequests;
-            logger.debug("latest request start time: ", reqList[reqList.length - 1].requestStartDate.getTime());
-        }
-        // console.log("cdf: ", cdf);
-        // console.log(getMinimunX(0.7));
-
-        //TODO: MetricsにCDFを追加する: 過去のスループットから
-
-        return SwitchRequest(context).create();
+        // if (metrics.RequestsQueue) {
+        //     const reqList = metrics.RequestsQueue.executedRequests;
+        //     logger.debug("latest request start time: ", reqList[reqList.length - 1].requestStartDate.getTime());
+        // }
+        const switchRequest = SwitchRequest(context).create();
+        switchRequest.quality = abrController.getQualityForBitrate(mediaInfo, nextBitrate, null);
+        console.log("next bitrate index: ", switchRequest.quality);
+        return switchRequest;
     }
 
     instance = {
