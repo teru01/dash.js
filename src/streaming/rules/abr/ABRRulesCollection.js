@@ -158,7 +158,7 @@ function ABRRulesCollection(config) {
     }
 
     function getMaxQuality(rulesContext) {
-        const switchRequestArray = qualitySwitchRules.map(rule => rule.getMaxIndex(rulesContext));
+        const switchRequestArray = qualitySwitchRules.map(rule => rule.getMaxIndex(rulesContext, isNow));
         const activeRules = getActiveRules(switchRequestArray);
         const maxQuality = getMinSwitchRequest(activeRules);
 

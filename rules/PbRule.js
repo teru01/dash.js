@@ -99,10 +99,10 @@ function PbRuleClass(config) {
     // filling state: 最低ビットレートを提供
     // steady state: 次のDLスケジュールも行う
     // DL直前に呼ばれる
-    function getMaxIndex(rulesContext) {
+    function getMaxIndex(rulesContext, isNow) {
         const ep = 0.25
         const abrController = rulesContext.getAbrController();
-        const scheduleController = rulesContext.getScheduleController();
+        // const scheduleController = rulesContext.getScheduleController();
         const mediaInfo = rulesContext.getMediaInfo();
         var mediaType = mediaInfo.type;
         var metrics = metricsModel.getMetricsFor(mediaType, true);
@@ -159,7 +159,7 @@ function PbRuleClass(config) {
             }
         } else {
             // まだrequestQueueが存在しないので即時次のリクエストをだす
-            scheduleController.startScheduleTimer(0)
+            // scheduleController.startScheduleTimer(0)
             // console.log(scheduleController);
             // scheduleController.setTimeToLoadDelay(0)
         }

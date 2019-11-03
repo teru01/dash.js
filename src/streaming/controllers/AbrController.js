@@ -297,7 +297,7 @@ function AbrController() {
         }
     }
 
-    function checkPlaybackQuality(type) {
+    function checkPlaybackQuality(type, isNow) {
         if (type  && streamProcessorDict && streamProcessorDict[type]) {
             const streamInfo = streamProcessorDict[type].getStreamInfo();
             const streamId = streamInfo ? streamInfo.id : null;
@@ -320,7 +320,7 @@ function AbrController() {
             if (!!settings.get().streaming.abr.autoSwitchBitrate[type]) {
                 const minIdx = getMinAllowedIndexFor(type);
                 const topQualityIdx = getTopQualityIndexFor(type, streamId);
-                const switchRequest = abrRulesCollection.getMaxQuality(rulesContext);
+                const switchRequest = abrRulesCollection.getMaxQuality(rulesContext, isNow);
                 let newQuality = switchRequest.quality;
                 if (minIdx !== undefined && ((newQuality > SwitchRequest.NO_CHANGE) ? newQuality : oldQuality) < minIdx) {
                     newQuality = minIdx;
