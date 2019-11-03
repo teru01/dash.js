@@ -80,7 +80,9 @@ function ScheduleController(config) {
         mediaRequest,
         liveEdgeFinder,
         isReplacementRequest,
-        requestCounter;
+        requestCounter,
+        initialRequestTime,
+        isPbSchedule;
 
     function setup() {
         logger = Debug(context).getInstance().getLogger(instance);
@@ -93,7 +95,8 @@ function ScheduleController(config) {
     }
 
     function initialize() {
-        requestCounter = 0;
+        // requestCounter = 0;
+        isPbSchedule = false;
         fragmentModel = streamProcessor.getFragmentModel();
 
         bufferLevelRule = BufferLevelRule(context).create({
@@ -131,6 +134,7 @@ function ScheduleController(config) {
         eventBus.on(Events.PLAYBACK_TIME_UPDATED, onPlaybackTimeUpdated, this);
         eventBus.on(Events.URL_RESOLUTION_FAILED, onURLResolutionFailed, this);
         eventBus.on(Events.FRAGMENT_LOADING_ABANDONED, onFragmentLoadingAbandoned, this);
+        eventBus.on(Events.CAN_PLAY, onCanPlay, this);
     }
 
     function isStarted() {
@@ -272,11 +276,12 @@ function ScheduleController(config) {
     // 次のリクエスト時刻を決定
     // @return (time: Date, isNow: boolean)
     function getNextRequestTime() {
+
         return -1, true;
     }
 
     // 次リクエストのビットレートを決定する
-    function makeNextRequest() {
+    function makeNextRequest(isNow) {
         const bufferController = streamProcessor.getBufferController();
         if (isStopped || isFragmentProcessingInProgress || !bufferController ||
             (playbackController.isPaused() && !settings.get().streaming.scheduleWhilePaused) ||
@@ -348,7 +353,7 @@ function ScheduleController(config) {
             };
 
             if (!isReplacement && !switchTrack) {
-                abrController.checkPlaybackQuality(type);
+                abrController.checkPlaybackQuality(type, isNow);
             }
 
             return getNextFragment();
@@ -410,8 +415,8 @@ function ScheduleController(config) {
         getInitRequest(currentRepresentationInfo.quality);
     }
 
-    function setFragmentProcessState (state) {
-        if (isFragmentProcessingInProgress !== state ) {
+    function setFragmentProcessState(state) {
+        if (isFragmentProcessingInProgress !== state) {
             isFragmentProcessingInProgress = state;
         } else {
             logger.debug('isFragmentProcessingInProgress is already equal to', state);
@@ -583,6 +588,17 @@ function ScheduleController(config) {
         completeQualityChange(true);
     }
 
+    function onCanPlay(e) {
+        // filling stateが終わった時
+        // 時間を初期化
+        isPbSchedule = true;
+        initialRequestTime = new Date().getTime();
+        requestCounter = 1;
+        const request = makeNextRequest(true);
+        scheduleRequest(request, 0);
+        console.log(e);
+    }
+
     function onBytesAppended(e) {
         if (e.sender.getStreamProcessor() !== streamProcessor) {
             return;
@@ -614,13 +630,22 @@ function ScheduleController(config) {
             // segmentのDLが完了した時。次のバッファをスケジューリングする
             logger.debug('not isReplacementRequest && !isNaN(e.startTime)');
             // logger.debug('DL完了。本来はこのタイミングで次がスケジューリングされる');
-            // if(filling_state) { // TODO
-            //     startScheduleTimer(0);
-            // }
             // 次のビットレート決定&スケジューリング
-            const [tns, isNow] = getNextRequestTime();
-            const request = makeNextRequest(isNow);
-            scheduleRequest(request, tns);
+
+            if (!isNaN(e.index)) {
+                // mediaSegmentの時
+                if (isPbSchedule) {
+                    requestCounter++;
+                }
+                logger.debug('current ReqCounter: ', requestCounter);
+                const [tns, isNow] = getNextRequestTime();
+                const request = makeNextRequest(isNow);
+                scheduleRequest(request, tns);
+            } else {
+                // initialSegmentの時、メディアセグメントを即時
+                const request = makeNextRequest(true);
+                scheduleRequest(request, 0);
+            }
             // startScheduleTimer(0);
         }
     }
@@ -731,7 +756,7 @@ function ScheduleController(config) {
     }
 
     function onPlaybackRateChanged(e) {
-        dashMetrics.updatePlayListTraceMetrics({playbackspeed: e.playbackRate.toString()});
+        dashMetrics.updatePlayListTraceMetrics({ playbackspeed: e.playbackRate.toString() });
     }
 
     function setSeekTarget(value) {
