@@ -43,6 +43,9 @@ function PbRuleClass(config) {
     let prevThrouput = -1;
     let dataNum = 0;
     let currentThroughput;
+    let playStartTime;
+    let requestN;
+    let prevHttpLen;
 
     let factory = dashjs.FactoryMaker;
     let EventBus = factory.getSingletonFactoryByName('EventBus');
@@ -51,28 +54,28 @@ function PbRuleClass(config) {
     let Debug = factory.getSingletonFactoryByName('Debug');
     let metricsModel = MetricsModel(context).getInstance();
     const eventBus = EventBus(context).getInstance();
+    const mediaPlayerModel = config.mediaPlayerModel;
 
     function setup() {
         logger = Debug(context).getInstance().getLogger(instance);
-        setInterval(calcCDF, 2000);
+        // setInterval(calcCDF, 2000);
 
         eventBus.on(dashjs.MediaPlayer.events.BUFFER_EMPTY, onBufferEmpty, instance);
         eventBus.on(dashjs.MediaPlayer.events.CAN_PLAY, onCanPlay, instance);
     }
 
-    function onBufferEmpty() {
-        console.log("バッファがない！！！");
+    function onBufferEmpty(e) {
+        logger.debug("バッファがない！！！");
     }
 
-    function onCanPlay() {
-        console.log("再生かいし！！");
+    function onCanPlay(e) {
+        logger.debug("再生かいし！！");
+        playStartTime = new Date().getTime();
+        requestN = 1;
+        console.log(e);
     }
 
-    function calcCDF() {
-        if (typeof currentThroughput === 'undefined') {
-            return;
-        }
-        const throughput = currentThroughput
+    function calcCDF(throughput) {
         const x = (prevThrouput === -1) ? 1 : prevThrouput / throughput;
         cdf[Math.min(Math.floor(x * (cdfRange / 2)), cdfRange - 1)] += 1;
         dataNum += 1
@@ -86,13 +89,16 @@ function PbRuleClass(config) {
         }
         for (let i = acum.length - 1; i >= 0; i--) {
             if ((acum[i] / dataNum) <= 1 - ep) {
-                return i / cdfRange;
+                return (i+1) / (cdfRange/2);
             }
         }
-        logger.debug("minimux ratio x* = ", 1e-5);
+        logger.debug("x: minimux ratio");
         return 1e-5;
     }
 
+    // filling state: 最低ビットレートを提供
+    // steady state: 次のDLスケジュールも行う
+    // DL直前に呼ばれる
     function getMaxIndex(rulesContext) {
         const ep = 0.25
         const abrController = rulesContext.getAbrController();
@@ -106,15 +112,23 @@ function PbRuleClass(config) {
         currentThroughput = throughputHistory.getSafeAverageThroughput(mediaType, isDynamic);
 
         const currentBufferLevel = dashMetrics.getCurrentBufferLevel(mediaType, true);
-        const maxBufferLevel = 5;
+        const maxBufferLevel = mediaPlayerModel.getStableBufferTime();
         let nextBitrate = 0;
         // console.log("buf level :", currentBufferLevel);
+
+        calcCDF(currentThroughput);
+
         if (metrics.RequestsQueue) {
             const reqList = metrics.RequestsQueue.executedRequests;
-            if (reqList && reqList.length > 1) {
-                const initRequestTime = reqList[1].requestStartDate.getTime();
+            if (reqList && reqList.length > 1 && typeof playStartTime !== 'undefined') {
+                const initRequestTime = playStartTime;
                 let b, tsn;
-                const tn = initRequestTime + (metrics.HttpList.length - 2) * segDuration;
+
+                if ((typeof prevHttpLen !== 'undefined') && prevHttpLen !== metrics.HttpList.length) {
+                    requestN++;
+                }
+                prevHttpLen = metrics.HttpList.length
+                const tn = initRequestTime + requestN * segDuration;
                 const now = new Date().getTime();
                 if (tn > now) {
                     tsn = tn;
@@ -126,8 +140,10 @@ function PbRuleClass(config) {
                 const x = getMinimunX(ep);
                 const gamma = 1 - (b + segDuration - maxBufferLevel) / (segDuration * x);
                 nextBitrate = prevThrouput * (1 - gamma);
+                console.log("initRequestTime: ", initRequestTime);
                 console.log("tn: ", tn);
                 console.log("tsn: ", tsn);
+                console.log("requestN: ", requestN);
                 console.log("maxbuf: ", maxBufferLevel);
                 console.log("currentbuf: ", currentBufferLevel);
                 console.log("minimux ratio x* = ", x);
@@ -146,7 +162,6 @@ function PbRuleClass(config) {
             scheduleController.startScheduleTimer(0)
             // console.log(scheduleController);
             // scheduleController.setTimeToLoadDelay(0)
-
         }
         console.log(metrics);
         // console.log(JSON.stringify(metrics.RequestsQueue));
