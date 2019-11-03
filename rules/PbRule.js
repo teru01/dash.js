@@ -37,7 +37,7 @@ function PbRuleClass(config) {
     const dashMetrics = config.dashMetrics;
     let instance,
         logger;
-    const segDuration = 2.5; // TODO: 要検証　HTTPRequestの_mediadurationから決め打ち
+    const segDuration = 2; // TODO: 要検証　HTTPRequestの_mediadurationから決め打ち
     const cdfRange = 20;
     let cdf = (new Array(cdfRange)).fill(0);
     let prevThrouput = -1;
@@ -98,7 +98,7 @@ function PbRuleClass(config) {
 
     // filling state: 最低ビットレートを提供
     // steady state: 次のDLスケジュールも行う
-    // DL直前に呼ばれる
+    // DL直前に呼ばれる.最初も呼ばれる
     function getMaxIndex(rulesContext, isNow) {
         const ep = 0.25
         const abrController = rulesContext.getAbrController();
@@ -118,51 +118,23 @@ function PbRuleClass(config) {
 
         calcCDF(currentThroughput);
 
-        if (metrics.RequestsQueue) {
-            const reqList = metrics.RequestsQueue.executedRequests;
-            if (reqList && reqList.length > 1 && typeof playStartTime !== 'undefined') {
-                const initRequestTime = playStartTime;
-                let b, tsn;
-
-                if ((typeof prevHttpLen !== 'undefined') && prevHttpLen !== metrics.HttpList.length) {
-                    requestN++;
-                }
-                prevHttpLen = metrics.HttpList.length
-                const tn = initRequestTime + requestN * segDuration;
-                const now = new Date().getTime();
-                if (tn > now) {
-                    tsn = tn;
-                    b = maxBufferLevel;
-                } else {
-                    tsn = now;
-                    b = currentBufferLevel;
-                }
-                const x = getMinimunX(ep);
-                const gamma = 1 - (b + segDuration - maxBufferLevel) / (segDuration * x);
-                nextBitrate = prevThrouput * (1 - gamma);
-                console.log("initRequestTime: ", initRequestTime);
-                console.log("tn: ", tn);
-                console.log("tsn: ", tsn);
-                console.log("requestN: ", requestN);
-                console.log("maxbuf: ", maxBufferLevel);
-                console.log("currentbuf: ", currentBufferLevel);
-                console.log("minimux ratio x* = ", x);
-                console.log("cdf: ", cdf);
-                console.log("gamma: ", gamma);
-                console.log("next scheduling time: ", tsn - new Date().getTime());
-                console.log("prev throughput: ", prevThrouput, "kbit/s");
-                console.log("nextBitrate: ", nextBitrate, "kbit/s");
-                // scheduleController.startScheduleTimer(tsn - new Date().getTime());
-                // scheduleController.setTimeToLoadDelay(0)
-            } else {
-
-            }
+        let b;
+        if(isNow) {
+            b = currentBufferLevel;
         } else {
-            // まだrequestQueueが存在しないので即時次のリクエストをだす
-            // scheduleController.startScheduleTimer(0)
-            // console.log(scheduleController);
-            // scheduleController.setTimeToLoadDelay(0)
+            b = maxBufferLevel;
         }
+        const x = getMinimunX(ep);
+        const gamma = 1 - (b + segDuration - maxBufferLevel) / (segDuration * x);
+        nextBitrate = prevThrouput * (1 - gamma);
+
+        console.log("maxbuf: ", maxBufferLevel);
+        console.log("currentbuf: ", currentBufferLevel);
+        console.log("minimux ratio x* = ", x);
+        console.log("cdf: ", cdf);
+        console.log("gamma: ", gamma);
+        console.log("prev throughput: ", prevThrouput, "kbit/s");
+        console.log("nextBitrate: ", nextBitrate, "kbit/s");
         console.log(metrics);
         // console.log(JSON.stringify(metrics.RequestsQueue));
         // if (metrics.RequestsQueue) {
