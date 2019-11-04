@@ -275,9 +275,14 @@ function ScheduleController(config) {
 
     // 次のリクエスト時刻を決定
     // @return (time: Date, isNow: boolean)
-    function getNextRequestTime() {
-
-        return -1, true;
+    function getNextRequestTime(initialRequestTime, requestCounter) {
+        const estimatedTime = initialRequestTime + (requestCounter - 1) * 2;
+        const now = new Date().getTime();
+        if (estimatedTime < now) { // TODO: duration = 2とした
+            return now, true;
+        } else {
+            return estimatedTime, false;
+        }
     }
 
     // 次リクエストのビットレートを決定する
@@ -638,7 +643,7 @@ function ScheduleController(config) {
                     requestCounter++;
                 }
                 logger.debug('current ReqCounter: ', requestCounter);
-                const [tns, isNow] = getNextRequestTime();
+                const [tns, isNow] = getNextRequestTime(initialRequestTime, requestCounter);
                 const request = makeNextRequest(isNow);
                 scheduleRequest(request, tns);
             } else {
