@@ -554,11 +554,11 @@ function BufferController(config) {
             notifyBufferStateChanged(MetricsConstants.BUFFER_EMPTY);
         } else {
             if (isBufferingCompleted || bufferLevel >= streamProcessor.getStreamInfo().manifestInfo.minBufferTime) {
-                if (isBufferingCompleted) {
-                    logger.debug('isBufferingCompleted ok');
-                } else if (isBufferingCompleted || bufferLevel >= streamProcessor.getStreamInfo().manifestInfo.minBufferTime) {
-                    logger.debug('十分なバッファ');
-                }
+                // if (isBufferingCompleted) {
+                //     logger.debug('isBufferingCompleted ok');
+                // } else if (isBufferingCompleted || bufferLevel >= streamProcessor.getStreamInfo().manifestInfo.minBufferTime) {
+                //     logger.debug('十分なバッファ');
+                // }
                 notifyBufferStateChanged(MetricsConstants.BUFFER_LOADED);
             }
         }

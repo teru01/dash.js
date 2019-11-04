@@ -89,7 +89,7 @@ function PbRuleClass(config) {
         }
         for (let i = acum.length - 1; i >= 0; i--) {
             if ((acum[i] / dataNum) <= 1 - ep) {
-                return (i+1) / (cdfRange/2);
+                return (i + 1) / (cdfRange / 2);
             }
         }
         logger.debug("x: minimux ratio");
@@ -100,9 +100,10 @@ function PbRuleClass(config) {
     // steady state: 次のDLスケジュールも行う
     // DL直前に呼ばれる.最初も呼ばれる
     function getMaxIndex(rulesContext, isNow) {
-        const ep = 0.25
+        const switchRequest = SwitchRequest(context).create();
+        let nextBitrate = 0;
+        const scheduleController = rulesContext.getScheduleController();
         const abrController = rulesContext.getAbrController();
-        // const scheduleController = rulesContext.getScheduleController();
         const mediaInfo = rulesContext.getMediaInfo();
         var mediaType = mediaInfo.type;
         var metrics = metricsModel.getMetricsFor(mediaType, true);
@@ -111,15 +112,22 @@ function PbRuleClass(config) {
         const isDynamic = streamInfo && streamInfo.manifestInfo ? streamInfo.manifestInfo.isDynamic : null;
         currentThroughput = throughputHistory.getSafeAverageThroughput(mediaType, isDynamic);
 
+        if (!scheduleController.isStableState()) {
+            switchRequest.quality = abrController.getQualityForBitrate(mediaInfo, nextBitrate, null);
+            console.log("isStableState: ", scheduleController.isStableState());
+            console.log("next bitrate index: ", switchRequest.quality);
+            return switchRequest;
+        }
+
         const currentBufferLevel = dashMetrics.getCurrentBufferLevel(mediaType, true);
         const maxBufferLevel = mediaPlayerModel.getStableBufferTime();
-        let nextBitrate = 0;
+        const ep = 0.25
         // console.log("buf level :", currentBufferLevel);
 
         calcCDF(currentThroughput);
 
         let b;
-        if(isNow) {
+        if (isNow) {
             b = currentBufferLevel;
         } else {
             b = maxBufferLevel;
@@ -141,7 +149,6 @@ function PbRuleClass(config) {
         //     const reqList = metrics.RequestsQueue.executedRequests;
         //     logger.debug("latest request start time: ", reqList[reqList.length - 1].requestStartDate.getTime());
         // }
-        const switchRequest = SwitchRequest(context).create();
         switchRequest.quality = abrController.getQualityForBitrate(mediaInfo, nextBitrate, null);
         console.log("next bitrate index: ", switchRequest.quality);
         return switchRequest;

@@ -82,7 +82,7 @@ function ScheduleController(config) {
         isReplacementRequest,
         requestCounter,
         initialRequestTime,
-        isPbSchedule;
+        isStableState;
 
     function setup() {
         logger = Debug(context).getInstance().getLogger(instance);
@@ -96,7 +96,7 @@ function ScheduleController(config) {
 
     function initialize() {
         // requestCounter = 0;
-        isPbSchedule = false;
+        isStableState = false;
         fragmentModel = streamProcessor.getFragmentModel();
 
         bufferLevelRule = BufferLevelRule(context).create({
@@ -139,6 +139,10 @@ function ScheduleController(config) {
 
     function isStarted() {
         return (isStopped === false);
+    }
+
+    function getIsStableState() {
+        return isStableState;
     }
 
     function start() {
@@ -268,20 +272,30 @@ function ScheduleController(config) {
 
     // ビットレート決定済みの次セグメントをスケジューリングする
     function scheduleRequest(request, t) {
+        console.log(request);
         logger.debug('リクエストスケジューリング: Next fragment request url is ' + request.url);
+        setTimeout(doRequest, t - new Date().getTime(), request);
+    }
+
+    function doRequest(request) {
         setFragmentProcessState(true);
-        setTimeout(fragmentModel.executeRequest, t - new Date().getTime(), request);
+        fragmentModel.executeRequest(request);
     }
 
     // 次のリクエスト時刻を決定
     // @return (time: Date, isNow: boolean)
     function getNextRequestTime(initialRequestTime, requestCounter) {
-        const estimatedTime = initialRequestTime + (requestCounter - 1) * 2;
+        const estimatedTime = initialRequestTime + (requestCounter - 1) * 2000;
         const now = new Date().getTime();
+
+        logger.debug('推測リクエスト時刻: ', estimatedTime);
+        logger.debug('現在時刻: ', now);
         if (estimatedTime < now) { // TODO: duration = 2とした
-            return now, true;
+            logger.debug('現在時刻を選択');
+            return { tns: now, isNow: true };
         } else {
-            return estimatedTime, false;
+            logger.debug('推測時刻を選択');
+            return { tns: estimatedTime, isNow: false };
         }
     }
 
@@ -351,13 +365,14 @@ function ScheduleController(config) {
                         } else { // Use case - Playing at the bleeding live edge and frag is not available yet. Cycle back around.
                             setFragmentProcessState(false);
                             console.log('次のセグメントが存在しない');
-                            startScheduleTimer(settings.get().streaming.lowLatencyEnabled ? 100 : 500);
+                            // startScheduleTimer(settings.get().streaming.lowLatencyEnabled ? 100 : 500);
                         }
                     }
                 }
             };
 
             if (!isReplacement && !switchTrack) {
+                // ビットレートの決定
                 abrController.checkPlaybackQuality(type, isNow);
             }
 
@@ -581,6 +596,7 @@ function ScheduleController(config) {
         if (e.error && e.request.serviceLocation && !isStopped) {
             replaceRequest(e.request);
             setFragmentProcessState(false);
+            logger.debug('フラグメントロードエラー');
             startScheduleTimer(0);
         }
 
@@ -596,15 +612,20 @@ function ScheduleController(config) {
     function onCanPlay(e) {
         // filling stateが終わった時
         // 時間を初期化
-        isPbSchedule = true;
+        isStableState = true;
         initialRequestTime = new Date().getTime();
         requestCounter = 1;
         const request = makeNextRequest(true);
-        scheduleRequest(request, 0);
+        if (request) {
+            scheduleRequest(request, 0);
+        } else {
+            // mpdが間に合わないなどでrequestが生成されない
+        }
         console.log(e);
     }
 
     function onBytesAppended(e) {
+        logger.debug('onBytesAppended');
         if (e.sender.getStreamProcessor() !== streamProcessor) {
             return;
         }
@@ -623,11 +644,11 @@ function ScheduleController(config) {
             const fragEndTime = e.startTime + currentRepresentationInfo.fragmentDuration;
             const safeBufferLevel = currentRepresentationInfo.fragmentDuration * 1.5;
             if ((currentTime + safeBufferLevel) >= fragEndTime) {
-                logger.debug('(currentTime + safeBufferLevel) >= fragEndTime');
+                logger.debug('リスケジュール: (currentTime + safeBufferLevel) >= fragEndTime');
                 startScheduleTimer(0);
             }
             else {
-                logger.debug('call startScheduleTimer: ', (fragEndTime - (currentTime + safeBufferLevel)) * 1000);
+                logger.debug('リスケジュール: ', (fragEndTime - (currentTime + safeBufferLevel)) * 1000);
                 startScheduleTimer((fragEndTime - (currentTime + safeBufferLevel)) * 1000);
             }
             isReplacementRequest = false;
@@ -637,21 +658,25 @@ function ScheduleController(config) {
             // logger.debug('DL完了。本来はこのタイミングで次がスケジューリングされる');
             // 次のビットレート決定&スケジューリング
 
+            if (!isStableState) {
+                startScheduleTimer(0);
+                return;
+            }
             if (!isNaN(e.index)) {
                 // mediaSegmentの時
-                if (isPbSchedule) {
-                    requestCounter++;
-                }
+                requestCounter++;
                 logger.debug('current ReqCounter: ', requestCounter);
-                const [tns, isNow] = getNextRequestTime(initialRequestTime, requestCounter);
+                const { tns, isNow } = getNextRequestTime(initialRequestTime, requestCounter);
                 const request = makeNextRequest(isNow);
-                scheduleRequest(request, tns);
+                if (request) {
+                    scheduleRequest(request, tns);
+                }
             } else {
                 // initialSegmentの時、メディアセグメントを即時
                 const request = makeNextRequest(true);
+
                 scheduleRequest(request, 0);
             }
-            // startScheduleTimer(0);
         }
     }
 
@@ -665,6 +690,7 @@ function ScheduleController(config) {
             replaceRequest(e.request);
         }
         setFragmentProcessState(false);
+        logger.debug('リスケジュール: onFragmentLoadingAbandoned');
         startScheduleTimer(0);
     }
 
@@ -753,6 +779,7 @@ function ScheduleController(config) {
 
         //if, during the seek command, the scheduleController is waiting : stop waiting, request chunk as soon as possible
         if (!isFragmentProcessingInProgress) {
+            logger.debug('リスケジュール: onPlaybackSeeking');
             startScheduleTimer(0);
         } else {
             logger.debug('onPlaybackSeeking, call fragmentModel.abortRequests in order to seek quicker');
@@ -847,6 +874,8 @@ function ScheduleController(config) {
         }
     }
 
+
+
     instance = {
         initialize: initialize,
         getType: getType,
@@ -860,7 +889,7 @@ function ScheduleController(config) {
         reset: reset,
         getBufferTarget: getBufferTarget,
         finalisePlayList: finalisePlayList,
-        startScheduleTimer: startScheduleTimer
+        isStableState: getIsStableState
     };
 
     setup();
